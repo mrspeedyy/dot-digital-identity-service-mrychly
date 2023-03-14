@@ -29,8 +29,17 @@ public class CustomerOnboarding {
         final ApiClient client = new ApiClient().setBasePath(configuration.DOT_IDENTITY_SERVICE_URL);
         client.setBearerToken(configuration.DOT_AUTHENTICATION_TOKEN);
         final CustomerOnboardingApi customerOnboardingApi = new CustomerOnboardingApi(client);
+        final FaceOperationsApi faceApi = new FaceOperationsApi(client);
+
 
         try {
+            final Double ageDecisionThreshold = configuration.ASPECTS_CHECK_AGE_THRESHOLD;
+            final String faceId = faceApi.detect(new CreateFaceRequest().image(new Image().url(configuration.EXAMPLE_IMAGE_URL))).getId();
+            LOG.info("Face detected with id: " + faceId);
+            FaceAspectsResponse faceAspectsResponse = faceApi.evaluateAspects(faceId);
+            boolean ageResult = faceAspectsResponse.getAge() >= ageDecisionThreshold;
+
+
             final CreateCustomerResponse customerResponse = customerOnboardingApi.createCustomer();
             String customerId = customerResponse.getId();
             LOG.info("Customer created with id: " + customerId);
@@ -64,6 +73,17 @@ public class CustomerOnboarding {
                 return;
             }
             LOG.info("Passive liveness score: " + passiveLivenessResponse.getScore());
+
+            if (checkFaceMask(configuration, faceApi, faceId)){
+                if (ageResult) {
+                    LOG.info("Customer is eligible");
+                }else {
+                    LOG.info("Customer is not eligible");
+                    return;
+                }
+            }
+
+
 
             customerOnboardingApi.createDocument(customerId, new CreateDocumentRequest().advice(new DocumentAdvice().classification(new DocumentClassificationAdvice().addCountriesItem("INO"))));
             CreateDocumentPageResponse createDocumentResponseFront = customerOnboardingApi.createDocumentPage(customerId, new CreateDocumentPageRequest().image(new Image().data(getDocumentImage("document-front"))));
@@ -127,6 +147,17 @@ public class CustomerOnboarding {
         File resultDirectory = new File("onboardingImages");
         if (!(resultDirectory.exists() && resultDirectory.isDirectory())) {
             resultDirectory.mkdir();
+        }
+    }
+    private static boolean checkFaceMask(Configuration configuration, FaceOperationsApi faceApi, String faceId) {
+        try {
+            FaceMaskResponse faceMaskResponse = faceApi.checkFaceMask(faceId);
+            boolean maskDetected = faceMaskResponse.getScore() > configuration.WEARABLES_FACE_MASK_THRESHOLD;
+            LOG.info("Face mask detected on face image: " + maskDetected);
+            return maskDetected;
+        } catch (ApiException exception) {
+            LOG.error("Mask detection call failed. Make sure balanced or accurate detection mode is enabled");
+            return false;
         }
     }
 }
