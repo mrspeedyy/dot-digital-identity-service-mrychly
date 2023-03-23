@@ -34,7 +34,7 @@ public class CustomerOnboarding {
 
         try {
             final Double ageDecisionThreshold = configuration.ASPECTS_CHECK_AGE_THRESHOLD;
-            final String faceId = faceApi.detect(new CreateFaceRequest().image(new Image().url(configuration.EXAMPLE_IMAGE_URL))).getId();
+            final String faceId = faceApi.detect(new CreateFaceRequest().image(new Image().data(getDetectionImage()))).getId();
             LOG.info("Face detected with id: " + faceId);
             FaceAspectsResponse faceAspectsResponse = faceApi.evaluateAspects(faceId);
             boolean ageResult = faceAspectsResponse.getAge() >= ageDecisionThreshold;
